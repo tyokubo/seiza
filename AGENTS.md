@@ -46,7 +46,6 @@ This project is a constellation exploration game.
 
 Before implementing features, read and follow:
 
-- docs/game-agent-rules.md
 - docs/game-design.md
 - docs/architecture.md
 - docs/data-model.md
