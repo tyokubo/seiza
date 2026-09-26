@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Redirect, router } from 'expo-router';
 import { useWindowDimensions } from 'react-native';
 import { useConstellationStore } from '@/features/constellation/ConstellationProvider';
@@ -17,7 +17,9 @@ export default function CreateScreen() {
   const skyId = `${phaseOneSky.id}:${store.sessionPeriod}`;
   const items = useMemo(() => store.data.library.filter((item) => item.skyId === skyId), [store.data.library, skyId]);
   const camera = store.sessionCamera;
-  const targetId = camera ? store.sessionTarget ?? preferredCreationTarget(creationChoices(stars, items, skyId, camera, dimensions), camera, dimensions) : undefined;
+  const [targetId] = useState(() => camera
+    ? store.sessionTarget ?? preferredCreationTarget(creationChoices(stars, items, skyId, camera, dimensions), camera, dimensions)
+    : undefined);
   if (!camera || targetId === undefined) return <Redirect href="/explore" />;
   const item = items.find((entry) => entry.id === targetId);
   return <ConstellationDraft initialCamera={camera} stars={availableStars(stars, items, skyId, targetId)} allStars={stars}

@@ -24,6 +24,14 @@ export const phaseOneSky: Sky = {
     { id: 'sheliak-seed', position: { x: -540, y: -300 }, brightness: 0.73 },
     { id: 'sulafat-seed', position: { x: -400, y: -430 }, brightness: 0.64 },
     { id: 'zeta-lyrae-seed', position: { x: -360, y: -330 }, brightness: 0.79 },
+    { id: 'west-arc-a', position: { x: -810, y: -80 }, brightness: 0.7 },
+    { id: 'west-arc-b', position: { x: -920, y: -150 }, brightness: 0.84 },
+    { id: 'west-arc-c', position: { x: -880, y: -280 }, brightness: 0.66 },
+    { id: 'west-arc-d', position: { x: -750, y: -240 }, brightness: 0.76 },
+    { id: 'north-loop-a', position: { x: 1030, y: -840 }, brightness: 0.68 },
+    { id: 'north-loop-b', position: { x: 1140, y: -820 }, brightness: 0.8 },
+    { id: 'north-loop-c', position: { x: 1190, y: -950 }, brightness: 0.72 },
+    { id: 'north-loop-d', position: { x: 1070, y: -1010 }, brightness: 0.86 },
   ] as Star[]).map((star) => ({
     ...star,
     position: {

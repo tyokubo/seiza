@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { gameConfig } from '@/config/gameConfig';
 import { normalizeConstellationName } from '../domain/saveData';
@@ -10,10 +10,9 @@ export function ConstellationNameDialog({ name, onSave, onClose, complete = fals
   const [value, setValue] = useState(name);
   const normalized = normalizeConstellationName(value);
   const save = () => { if (normalized) { onSave(normalized); onClose(); } };
-  return <Modal transparent animationType="fade" onRequestClose={onClose}>
-    <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+  return <KeyboardAvoidingView style={[StyleSheet.absoluteFill, styles.backdrop]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="名前の編集を閉じる" onPress={onClose} />
-      <View style={styles.dialog}>
+      <View style={styles.dialog} accessibilityViewIsModal>
         <ThemedText type="subtitle" style={styles.title}>星座の名前</ThemedText>
         <TextInput accessibilityLabel="星座の名前" autoFocus value={value} onChangeText={setValue}
           placeholder="名前を入力" placeholderTextColor="#83959d" maxLength={gameConfig.constellationEditor.maxNameLength}
@@ -28,12 +27,11 @@ export function ConstellationNameDialog({ name, onSave, onClose, complete = fals
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
-  </Modal>;
+    </KeyboardAvoidingView>;
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.65)' },
+  backdrop: { alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.65)' },
   dialog: { width: '100%', maxWidth: 360, backgroundColor: '#12212a', borderRadius: 8, padding: 20, gap: 20 },
   title: { color: '#eff9ff', fontSize: 20 },
   input: { height: 48, borderWidth: 1, borderColor: '#718c97', borderRadius: 6, paddingHorizontal: 12, color: '#ffffff', fontSize: 17 },

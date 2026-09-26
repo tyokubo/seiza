@@ -41,11 +41,14 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
   useLayoutEffect(() => { activeRef.current = active; }, [active]);
   const [canvasSize, setCanvasSize] = useState<ScreenSize>(fallbackSize);
   const [gyroStatus, setGyroStatus] = useState<'starting' | 'active' | 'unavailable' | 'denied'>('starting');
+  const [gyroEnabled, setGyroEnabled] = useState(true);
+  const gyroEnabledRef = useRef(true);
   const [lastGyroStepDegrees, setLastGyroStepDegrees] = useState(0);
   const [deviceMotionDebug, setDeviceMotionDebug] = useState<DeviceMotionDebugSample | null>(null);
   const [registrationNotice, setRegistrationNotice] = useState(false);
   const motionTrackingRef = useRef<DeviceMotionTracking | null>(null);
   const recenterFrameRef = useRef<number | null>(null);
+  const recenterActiveRef = useRef(false);
   const lastDeviceMotionDebugAtRef = useRef(0);
   const { camera, discoveredStarIds } = state;
 
@@ -94,6 +97,7 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
     if (state.recenterStartOffset === null && recenterFrameRef.current !== null) {
       cancelAnimationFrame(recenterFrameRef.current);
       recenterFrameRef.current = null;
+      recenterActiveRef.current = false;
     }
   }, [state.recenterStartOffset]);
 
@@ -168,7 +172,7 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
           ? updateDeviceMotionTracking(previous, orientation)
           : createPortraitDeviceMotionTracking(orientation);
         motionTrackingRef.current = tracking;
-        if (!activeRef.current) return;
+        if (!activeRef.current || !gyroEnabledRef.current || recenterActiveRef.current) return;
         captureDeviceMotionDebug(measurement, rotation, orientation, tracking.filteredDevice);
         setLastGyroStepDegrees(previous
           ? quaternionAngle(relativeDeviceRotation(previous.orientation, tracking.orientation)) * 180 / Math.PI
@@ -194,6 +198,7 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
         cancelAnimationFrame(recenterFrameRef.current);
         recenterFrameRef.current = null;
       }
+      recenterActiveRef.current = false;
     };
   }, [sky]);
 
@@ -207,28 +212,30 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
   );
 
   function recenterGyro() {
-    if (!state.gyroOrientation || camera.mode !== 'normal') return;
+    if (!gyroEnabledRef.current || !state.gyroOrientation || camera.mode !== 'normal') return;
 
     if (recenterFrameRef.current !== null) {
       cancelAnimationFrame(recenterFrameRef.current);
     }
 
     let startTime: number | null = null;
+    let lastFrameTime = -Infinity;
+    recenterActiveRef.current = true;
     dispatch({ type: 'beginRecenter' });
 
     const animate = (timestamp: number) => {
       startTime ??= timestamp;
       const progress = Math.min(1, (timestamp - startTime) / gameConfig.deviceMotion.recenterDurationMs);
-      dispatch({
-        type: 'recenterProgress',
-        progress,
-        sky,
-      });
+      if (progress === 1 || timestamp - lastFrameTime >= 25) {
+        lastFrameTime = timestamp;
+        dispatch({ type: 'recenterProgress', progress, orientation: motionTrackingRef.current?.orientation, sky });
+      }
 
       if (progress < 1) {
         recenterFrameRef.current = requestAnimationFrame(animate);
       } else {
         recenterFrameRef.current = null;
+        recenterActiveRef.current = false;
       }
     };
 
@@ -249,10 +256,26 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
     },
     dowsingSignal,
     gyroStatus,
+    gyroEnabled,
     lastGyroStepDegrees,
     lastSwipe: state.lastSwipe,
     panHandlers: panResponder.panHandlers,
     recenterGyro,
+    setGyroEnabled: (enabled: boolean) => {
+      gyroEnabledRef.current = enabled;
+      setGyroEnabled(enabled);
+      if (recenterFrameRef.current !== null) {
+        cancelAnimationFrame(recenterFrameRef.current);
+        recenterFrameRef.current = null;
+      }
+      recenterActiveRef.current = false;
+      if (enabled && motionTrackingRef.current) dispatch({ type: 'resumeGyro', orientation: motionTrackingRef.current.orientation });
+      else dispatch({ type: 'cancelRecenter' });
+    },
+    resetDiscoveredStars: (protectedIds: string[]) => {
+      setRegistrationNotice(false);
+      dispatch({ type: 'resetDiscoveredStars', protectedIds });
+    },
     registerStar: () => {
       if (!state.foundStarId) return;
       dispatch({ type: 'registerStar', sky });
@@ -266,6 +289,7 @@ export function useExploration(sky: Sky, initialRegisteredStarIds: string[] = []
         cancelAnimationFrame(recenterFrameRef.current);
         recenterFrameRef.current = null;
       }
+      recenterActiveRef.current = false;
       dispatch({ type: 'setMode', mode, sky });
     },
     skyDensitySignal,
@@ -305,7 +329,10 @@ function createExplorationPanResponder(
   return PanResponder.create({
     onStartShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length === 2,
     onStartShouldSetPanResponder: (event) => event.nativeEvent.touches.length === 2,
-    onMoveShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length === 2,
+    onMoveShouldSetPanResponderCapture: (event, gestureState) =>
+      event.nativeEvent.touches.length === 2 ||
+      (event.nativeEvent.touches.length === 1 &&
+        (Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2)),
     onMoveShouldSetPanResponder: (event, gestureState) =>
       event.nativeEvent.touches.length === 2 ||
       (event.nativeEvent.touches.length === 1 &&

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { gameConfig } from '@/config/gameConfig';
 import { NormalDensityOverlay } from '@/features/exploration/components/NormalDensityOverlay';
@@ -44,6 +45,11 @@ export function SkyCanvas({
   const tapRadius = camera.mode === 'telescope' ? gameConfig.telescopeStarTapRadius : gameConfig.starTapRadius;
   const focusingStar = visibleStars.find((star) => star.id === focusingStarId);
   const ripplePoint = focusingStar ? worldToScreen(focusingStar.position, camera, size) : null;
+  const densityLabel = skyDensitySignal.label;
+  const edgeGlow = camera.mode === 'normal' ? {
+    color: gameConfig.densityEffect.colors[densityLabel],
+    opacity: gameConfig.densityEffect.glowOpacity[densityLabel],
+  } : undefined;
 
   return (
     <View
@@ -52,7 +58,7 @@ export function SkyCanvas({
         const { width, height } = event.nativeEvent.layout;
         onLayoutChange({ width, height });
       }}>
-      <SkyPanoramaView camera={camera} discoveredStarIds={discoveredStarIds} size={size} stars={renderedStars} />
+      <SkyPanoramaView camera={camera} discoveredStarIds={discoveredStarIds} size={size} stars={renderedStars} edgeGlow={edgeGlow} />
       <ConstellationsInSky items={constellations} camera={camera} size={size} />
       {camera.mode === 'normal' && <HorizonCompass camera={camera} size={size} />}
       {camera.mode === 'normal' && <NormalDensityOverlay modeChromeProgress={modeChromeProgress} signal={skyDensitySignal} size={size} />}
@@ -143,27 +149,11 @@ function getApertureLayout(size: ScreenSize): ApertureLayout {
 }
 
 function TelescopeMask({ aperture, size }: { aperture: ApertureLayout; size: ScreenSize }) {
-  const maskWidth = Math.max(size.width, size.height);
-  const outerDiameter = aperture.diameter + maskWidth * 2;
-
-  return (
-    <>
-      <View
-        pointerEvents="none"
-        style={[
-          styles.telescopeMaskRing,
-          {
-            left: aperture.left - maskWidth,
-            top: aperture.top - maskWidth,
-            width: outerDiameter,
-            height: outerDiameter,
-            borderRadius: outerDiameter / 2,
-            borderWidth: maskWidth,
-          },
-        ]}
-      />
-    </>
-  );
+  const r = aperture.diameter / 2;
+  const hole = `M${aperture.centerX - r},${aperture.centerY} A${r},${r} 0 1 0 ${aperture.centerX + r},${aperture.centerY} A${r},${r} 0 1 0 ${aperture.centerX - r},${aperture.centerY} Z`;
+  return <Svg pointerEvents="none" width={size.width} height={size.height} style={StyleSheet.absoluteFill}>
+    <Path d={`M0,0 H${size.width} V${size.height} H0 Z ${hole}`} fill="#000" fillOpacity={0.78} fillRule="evenodd" />
+  </Svg>;
 }
 
 function TelescopeRim({ aperture }: { aperture: ApertureLayout }) {
@@ -212,10 +202,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(230, 245, 255, 0.56)',
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
-  },
-  telescopeMaskRing: {
-    position: 'absolute',
-    borderColor: 'rgba(0, 0, 0, 0.78)',
   },
   reticleLine: {
     position: 'absolute',

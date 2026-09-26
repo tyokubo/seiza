@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { router, usePathname } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { SymbolView } from 'expo-symbols';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -28,6 +28,7 @@ const searchableStarCount = phaseOneSky.stars.filter(isStarAboveHorizon).length;
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const [debugVisible, setDebugVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const store = useConstellationStore();
   const constellations = useMemo(() => store.data.library.filter((item) => item.periodKey === store.currentPeriod), [store.data.library, store.currentPeriod]);
   const pathname = usePathname();
@@ -44,21 +45,26 @@ export default function ExploreScreen() {
     foundStarId,
     dowsingSignal,
     gyroStatus,
+    gyroEnabled,
     lastGyroStepDegrees,
     lastSwipe,
     isFocusing,
     panHandlers,
     recenterGyro,
+    resetDiscoveredStars,
     registeredStars,
     registrationNotice,
     registerStar,
     setCanvasSize,
+    setGyroEnabled,
     setMode,
     skyDensitySignal,
     visibleStars,
   } = useExploration(phaseOneSky, store.data.registeredStarIds, pathname === '/explore');
   const { updateRegisteredStars } = store;
   useEffect(() => updateRegisteredStars(discoveredStarIds), [discoveredStarIds, updateRegisteredStars]);
+  const protectedStarIds = useMemo(() => [...new Set(store.data.library.flatMap((item) => item.starIds))], [store.data.library]);
+  const resettableCount = discoveredStarIds.filter((id) => !protectedStarIds.includes(id)).length;
   const choices = useMemo(() => creationChoices(registeredStars, constellations, `${phaseOneSky.id}:${store.currentPeriod}`, camera, canvasSize), [registeredStars, constellations, store.currentPeriod, camera, canvasSize]);
   const canEnterEditor = camera.mode === 'normal' && (choices.canCreate || choices.candidates.length > 0);
   const craftingReady = useCraftingAvailability(canEnterEditor);
@@ -157,12 +163,9 @@ export default function ExploreScreen() {
         <View style={styles.topBar}>
           <View style={styles.titleBlock}>
             <ThemedText type="subtitle" style={styles.title}>
-              星空探索
+              {camera.mode === 'normal' ? '肉眼モード' : '望遠鏡モード'}
             </ThemedText>
             <View pointerEvents="none" style={styles.inlineMeta}>
-              <ThemedText type="smallBold" style={styles.inlineMetaText}>
-                {camera.mode === 'normal' ? '方向探索' : '精密探索'}
-              </ThemedText>
               <ThemedText type="smallBold" style={styles.inlineMetaText}>
                 {discoveredStarIds.length}/{searchableStarCount}
               </ThemedText>
@@ -176,35 +179,20 @@ export default function ExploreScreen() {
             {camera.mode === 'normal' && (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="ジャイロ視点を再調整"
-                accessibilityHint="スワイプ分のずれを戻し、現在の端末の向きへ視点を移動します"
+                accessibilityLabel="現在の向きに戻す"
+                accessibilityHint="スワイプでずらした視点を、現在の端末の向きへ戻します"
+                accessibilityState={{ disabled: !gyroEnabled || gyroStatus !== 'active' }}
+                disabled={!gyroEnabled || gyroStatus !== 'active'}
                 onPress={recenterGyro}
-                style={styles.settingsButton}>
+                style={[styles.settingsButton, (!gyroEnabled || gyroStatus !== 'active') && styles.settingsActionDisabled]}>
                 <ThemedText type="smallBold" style={styles.settingsText}>
                   ⌖
                 </ThemedText>
               </Pressable>
             )}
-            <Pressable accessibilityRole="button" style={styles.settingsButton}>
-              <ThemedText type="smallBold" style={styles.settingsText}>
-                ⚙︎
-              </ThemedText>
+            <Pressable accessibilityRole="button" accessibilityLabel="設定" onPress={() => setSettingsVisible(true)} style={styles.settingsButton}>
+              <MaterialCommunityIcons name="cog-outline" size={22} color="#f4fbff" />
             </Pressable>
-            {__DEV__ ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={debugVisible ? 'デバッグ表示を閉じる' : 'デバッグ表示を開く'}
-                onPress={() => {
-                  setDebugVisible((visible) => !visible);
-                  setIsMarkingMountain(false);
-                }}
-                style={[styles.debugButton, debugVisible && styles.debugButtonActive]}>
-                <ThemedText type="smallBold" style={styles.debugButtonText}>
-                  DBG
-                </ThemedText>
-              </Pressable>
-            ) : null}
-
           </View>
         </View>
 
@@ -232,7 +220,7 @@ export default function ExploreScreen() {
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={enteringTelescope ? '望遠鏡を外す' : '望遠鏡'}
+              accessibilityLabel={enteringTelescope ? '望遠鏡を外す' : '望遠鏡を覗く'}
               onPress={() => setMode(enteringTelescope ? 'normal' : 'telescope')}
               style={styles.modeButton}>
               {enteringTelescope ? (
@@ -247,7 +235,7 @@ export default function ExploreScreen() {
             </Pressable>
           )}
           <ThemedText type="smallBold" style={styles.modeButtonText}>
-            {enteringTelescope && foundStarId ? '登録' : enteringTelescope ? '望遠鏡を外す' : '望遠鏡'}
+            {enteringTelescope && foundStarId ? '登録' : enteringTelescope ? '望遠鏡を外す' : '望遠鏡を覗く'}
           </ThemedText>
         </View>
         <ConstellationButton
@@ -276,6 +264,46 @@ export default function ExploreScreen() {
             size={canvasSize}
           />
         ) : null}
+        {settingsVisible && <View style={styles.settingsOverlay}>
+          <Pressable accessibilityRole="button" accessibilityLabel="設定を閉じる" onPress={() => setSettingsVisible(false)} style={StyleSheet.absoluteFill} />
+          <View style={styles.settingsPanel}>
+            <View style={styles.settingsHeader}>
+              <ThemedText type="subtitle" style={styles.settingsTitle}>設定</ThemedText>
+              <Pressable accessibilityRole="button" accessibilityLabel="閉じる" onPress={() => setSettingsVisible(false)} style={styles.settingsClose}>
+                <MaterialCommunityIcons name="close" size={24} color="#f4fbff" />
+              </Pressable>
+            </View>
+            <View style={[styles.settingsAction, styles.settingsGyroRow]}>
+              <MaterialCommunityIcons name={gyroEnabled ? 'motion-sensor' : 'motion-sensor-off'} size={22} color="#f4fbff" />
+              <ThemedText type="smallBold" style={[styles.settingsActionTitle, { flex: 1 }]}>ジャイロON/OFF</ThemedText>
+              <View style={styles.settingsSwitchSlot}>
+                <Switch accessibilityLabel="ジャイロON/OFF" value={gyroEnabled && gyroStatus === 'active'} onValueChange={setGyroEnabled}
+                  disabled={gyroStatus !== 'active'} trackColor={{ false: '#526073', true: '#57a9d3' }} thumbColor="#f4fbff" />
+              </View>
+            </View>
+            {camera.mode === 'telescope' && <Pressable accessibilityRole="button" accessibilityLabel="望遠鏡を外す"
+              onPress={() => { setMode('normal'); setSettingsVisible(false); }} style={styles.settingsAction}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color="#f4fbff" />
+              <ThemedText type="smallBold" style={styles.settingsActionTitle}>望遠鏡を外す</ThemedText>
+            </Pressable>}
+            {__DEV__ && <Pressable accessibilityRole="button" accessibilityLabel={debugVisible ? 'デバッグ表示を閉じる' : 'デバッグ表示を開く'}
+              onPress={() => { setDebugVisible((visible) => !visible); setIsMarkingMountain(false); setSettingsVisible(false); }}
+              style={[styles.settingsAction, debugVisible && styles.debugButtonActive]}>
+              <MaterialCommunityIcons name="bug-outline" size={22} color="#f4fbff" />
+              <ThemedText type="smallBold" style={styles.settingsActionTitle}>{debugVisible ? 'デバッグ表示を閉じる' : 'デバッグ表示を開く'}</ThemedText>
+            </Pressable>}
+            {__DEV__ && <Pressable accessibilityRole="button" accessibilityLabel="未使用の発見済み星を未発見に戻す"
+              accessibilityState={{ disabled: resettableCount === 0 }} disabled={resettableCount === 0}
+              onPress={() => { resetDiscoveredStars(protectedStarIds); setSettingsVisible(false); }}
+              style={[styles.settingsAction, resettableCount === 0 && styles.settingsActionDisabled]}>
+              <MaterialCommunityIcons name="restore" size={22} color="#f4fbff" />
+              <View style={styles.settingsActionText}>
+                <ThemedText type="smallBold" style={styles.settingsActionTitle}>発見した星を未発見に戻す</ThemedText>
+                <ThemedText style={styles.settingsActionCaption}>星座に使用中の星は残します</ThemedText>
+              </View>
+            </Pressable>}
+          </View>
+        </View>}
       </SafeAreaView>
     </View>
   );
@@ -394,6 +422,41 @@ const styles = StyleSheet.create({
     fontSize: 19,
     lineHeight: 21,
   },
+  settingsOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 20,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0, 4, 13, 0.72)',
+  },
+  settingsPanel: {
+    backgroundColor: '#12243a',
+    borderRadius: 8,
+    padding: 16,
+    gap: 12,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingsTitle: { color: '#f4fbff' },
+  settingsClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  settingsAction: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#203d60',
+  },
+  settingsGyroRow: { height: 64 },
+  settingsSwitchSlot: { height: 44, justifyContent: 'center', alignItems: 'center' },
+  settingsActionDisabled: { opacity: 0.45 },
+  settingsActionText: { flex: 1 },
+  settingsActionTitle: { color: '#f4fbff', fontSize: 14 },
+  settingsActionCaption: { color: '#b6cada', fontSize: 11 },
   modeControl: {
     position: 'absolute',
     width: 160,

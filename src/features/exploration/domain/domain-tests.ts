@@ -273,10 +273,19 @@ exploration = explorationReducer(exploration, { type: 'recenterProgress', progre
 assertOrientation(exploration.camera.orientation, startRecenterCamera.orientation, 'recenter should not jump at its first frame');
 exploration = explorationReducer(exploration, { type: 'recenterProgress', progress: 0.5, sky: testSky });
 assert(quaternionAngle(exploration.swipeOffset) < quaternionAngle(offset), 'recenter should progressively remove swipe');
+const duringRecenter = exploration.camera.orientation;
 exploration = explorationReducer(exploration, { type: 'deviceMotionOrientation', orientation: rolledCamera, sky: testSky });
-exploration = explorationReducer(exploration, { type: 'recenterProgress', progress: 1, sky: testSky });
+assertOrientation(exploration.camera.orientation, duringRecenter, 'sensor samples must not trigger extra panorama frames during recenter');
+exploration = explorationReducer(exploration, { type: 'recenterProgress', progress: 1, orientation: rolledCamera, sky: testSky });
 assertOrientation(exploration.camera.orientation, rolledCamera, 'recenter must finish at the latest device pose');
 assertOrientation(exploration.swipeOffset, identityQuaternion, 'recenter must remove all swipe offset');
+let resumed = exploration;
+const beforeResume = resumed.camera.orientation;
+const resumedPose = quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, 0.42);
+resumed = explorationReducer(resumed, { type: 'resumeGyro', orientation: resumedPose });
+assertOrientation(resumed.camera.orientation, beforeResume, 'enabling gyro must preserve the current view');
+resumed = explorationReducer(resumed, { type: 'deviceMotionOrientation', orientation: resumedPose, sky: testSky });
+assertOrientation(resumed.camera.orientation, beforeResume, 'first live sensor sample must not jump');
 
 exploration = explorationReducer(exploration, { type: 'setMode', mode: 'telescope', sky: testSky });
 const telescopeStart = exploration.camera;
@@ -361,6 +370,9 @@ assertEqual(discovery.discoveredStarIds.join(','), 'near', 'register should pers
 assertEqual(discovery.foundStarId, null, 'register should dismiss the discovery prompt');
 discovery = explorationReducer(discovery, { type: 'registerStar', sky: discoverySky });
 assertEqual(discovery.discoveredStarIds.length, 1, 'registering twice must not duplicate the star');
+const resetDiscovery = explorationReducer({ ...discovery, discoveredStarIds: ['near', 'other'] },
+  { type: 'resetDiscoveredStars', protectedIds: ['near'] });
+assertEqual(resetDiscovery.discoveredStarIds.join(','), 'near', 'debug reset must preserve stars owned by saved constellations');
 assertEqual(getDowsingSignal(discovery.camera, discoverySky.stars.filter(
   (star) => !discovery.discoveredStarIds.includes(star.id))).label, 'silent',
   'radar must go silent once all eligible stars are registered');

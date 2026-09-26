@@ -59,7 +59,9 @@ for (let degrees = 0; degrees < 360; degrees += 3) {
   }
 }
 assert(!stampProjectionIsSafe([{ x: -100000, y: 0 }, { x: 1, y: 0 }], size), 'Oversized stamp projections are culled');
-assert(stampProjectionIsSafe([{ x: 100, y: 100 }, { x: 120, y: 120 }], size), 'Visible stamps remain drawable');
+assert(stampProjectionIsSafe([{ x: 100, y: 100 }, { x: 120, y: 100 }, { x: 120, y: 120 }, { x: 100, y: 120 }], size), 'Visible stamps remain drawable');
+assert(stampProjectionIsSafe([{ x: -60, y: 100 }, { x: 100, y: 100 }, { x: 100, y: 200 }, { x: -60, y: 200 }], size),
+  'A stamp stays visible when its edge leaves the zoomed viewport');
 assert(projectPlanePath([{ x: -1, y: 0 }, { x: 1, y: 0 }], camera.orientation,
   { ...camera, orientation: quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, Math.PI / 2) }, size).length === 1,
   'A stroke crossing the camera near plane retains its visible segment');

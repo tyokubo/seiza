@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type ComponentProps } from 'react';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import type { CameraState, ScreenSize } from '@/features/exploration/domain/camera';
@@ -33,7 +33,7 @@ export function ConstellationDraft({ initialCamera, stars, allStars, initialDraf
   const [allowExit, setAllowExit] = useState(false);
   usePreventRemove(!allowExit, () => { if (!saving) setLeaving(true); });
   useEffect(() => { if (allowExit) onClose(); }, [allowExit, onClose]);
-  const exit = () => setAllowExit(true);
+  const exit = () => { setLeaving(false); setAllowExit(true); };
   const draft = state.present;
   const [camera, setCamera] = useState(initialCamera);
   const [tool, setTool] = useState<ArtTool | 'connect'>('connect');
@@ -135,19 +135,20 @@ export function ConstellationDraft({ initialCamera, stars, allStars, initialDraf
       setName(value);
       if (finishing) {
         setSaving(true);
-        store.completeDraft(draft, value, editingId).then(exit).catch((error: unknown) => {
+        store.completeDraft(draft, value, editingId).then(() => { setSaving(false); exit(); }).catch((error: unknown) => {
           setNotice(error instanceof Error ? error.message : '保存に失敗しました。もう一度お試しください');
-        }).finally(() => setSaving(false));
+          setSaving(false);
+        });
       }
     }} onClose={() => setNaming(false)} />}
-    {leaving && <Modal transparent animationType="fade" onRequestClose={() => setLeaving(false)}>
-      <View style={styles.modalBackdrop}><View style={styles.dialog} accessibilityViewIsModal>
+    {leaving && <View style={[StyleSheet.absoluteFill, styles.modalBackdrop]}>
+      <View style={styles.dialog} accessibilityViewIsModal>
         <ThemedText style={styles.dialogText}>変更が保存されませんがよろしいですか？</ThemedText>
         <Pressable accessibilityRole="button" onPress={() => setLeaving(false)} style={styles.dialogAction}><ThemedText style={styles.dialogText}>制作に戻る</ThemedText></Pressable>
         <Pressable accessibilityRole="button" onPress={exit} style={styles.dialogAction}><ThemedText style={styles.dialogText}>保存せずに戻る</ThemedText></Pressable>
-      </View></View>
-    </Modal>}
-    {saving && <Modal transparent onRequestClose={() => {}}><View style={styles.modalBackdrop}><ActivityIndicator color="#fff" /><ThemedText style={styles.dialogText}>保存中</ThemedText></View></Modal>}
+      </View>
+    </View>}
+    {saving && <View style={[StyleSheet.absoluteFill, styles.modalBackdrop]}><ActivityIndicator color="#fff" /><ThemedText style={styles.dialogText}>保存中</ThemedText></View>}
   </View>;
 }
 

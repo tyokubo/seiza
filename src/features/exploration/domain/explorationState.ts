@@ -49,12 +49,15 @@ export type ExplorationAction =
   | { type: 'dragTo'; delta: Point2D; sky: Sky }
   | { type: 'deviceMotionOrientation'; orientation: Quaternion; sky: Sky }
   | { type: 'beginRecenter' }
-  | { type: 'recenterProgress'; progress: number; sky: Sky }
+  | { type: 'cancelRecenter' }
+  | { type: 'resumeGyro'; orientation: Quaternion }
+  | { type: 'recenterProgress'; progress: number; orientation?: Quaternion; sky: Sky }
   | { type: 'endDrag' }
   | { type: 'setMode'; mode: CameraMode; sky: Sky }
   | { type: 'selectStar'; starId: string; size: { width: number; height: number }; sky: Sky }
   | { type: 'focusProgress'; progress: number; sky: Sky }
-  | { type: 'registerStar'; sky: Sky };
+  | { type: 'registerStar'; sky: Sky }
+  | { type: 'resetDiscoveredStars'; protectedIds: string[] };
 
 export function createExplorationState(): ExplorationState {
   const camera = createInitialCamera();
@@ -94,20 +97,28 @@ export function explorationReducer(state: ExplorationState, action: ExplorationA
         dragStartGyro: null,
         lastSwipe: createSwipeDebugSample(state.camera, { x: 0, y: 0 }),
       };
+    case 'cancelRecenter':
+      return { ...state, recenterStartOffset: null };
+    case 'resumeGyro':
+      return { ...state, gyroOrientation: action.orientation,
+        swipeOffset: multiplyQuaternions(state.camera.orientation, inverseQuaternion(action.orientation)),
+        recenterStartOffset: null, dragStartCamera: null, dragStartGyro: null };
     case 'recenterProgress': {
-      if (!state.recenterStartOffset || !state.gyroOrientation) return state;
+      const gyroOrientation = action.orientation ?? state.gyroOrientation;
+      if (!state.recenterStartOffset || !gyroOrientation) return state;
       const progress = Math.max(0, Math.min(1, action.progress));
       const swipeOffset = slerpQuaternion(state.recenterStartOffset, identityQuaternion, 1 - (1 - progress) ** 3);
       return updateCamera({
         ...state,
+        gyroOrientation,
         swipeOffset,
         recenterStartOffset: progress === 1 ? null : state.recenterStartOffset,
-      }, { ...state.camera, orientation: multiplyQuaternions(swipeOffset, state.gyroOrientation) }, action.sky);
+      }, { ...state.camera, orientation: multiplyQuaternions(swipeOffset, gyroOrientation) }, action.sky);
     }
     case 'deviceMotionOrientation': {
       // Tracking continues in telescope mode, but only normal mode follows the device.
       const next = { ...state, gyroOrientation: action.orientation };
-      if (state.camera.mode !== 'normal') return next;
+      if (state.camera.mode !== 'normal' || state.recenterStartOffset) return next;
       return updateCamera(next, {
         ...state.camera,
         orientation: multiplyQuaternions(state.swipeOffset, action.orientation),
@@ -186,6 +197,11 @@ export function explorationReducer(state: ExplorationState, action: ExplorationA
         ),
         foundStarId: null,
       };
+    }
+    case 'resetDiscoveredStars': {
+      const protectedIds = new Set(action.protectedIds);
+      return { ...state, discoveredStarIds: state.discoveredStarIds.filter((id) => protectedIds.has(id)),
+        focus: null, foundStarId: null };
     }
   }
 }

@@ -10,6 +10,7 @@ import { identityQuaternion, multiplyQuaternions, type Quaternion } from '@/feat
 import { mountainWorldToPanorama } from '@/features/sky/domain/panorama';
 import { skyPointToDirection } from '@/features/sky/domain/sphericalCoordinates';
 import type { Star } from '@/features/sky/domain/types';
+import { createEdgeGlowPass, drawEdgeGlow, type EdgeGlow, type EdgeGlowPass } from '@/features/exploration/rendering/edgeGlow';
 
 const panoramaAsset = require('@/assets/images/sky-panorama.png');
 const mountainPanoramaAsset = require('@/assets/images/mountain_new.png');
@@ -19,6 +20,7 @@ type SkyPanoramaViewProps = {
   discoveredStarIds: string[];
   size: ScreenSize;
   stars: Star[];
+  edgeGlow?: EdgeGlow;
 };
 
 type PanoramaPass = {
@@ -44,11 +46,13 @@ type PanoramaRenderer = {
   starBuffer: WebGLBuffer;
   skyTexture: WebGLTexture;
   mountainTexture: WebGLTexture;
+  edgeGlowPass: EdgeGlowPass;
 };
 
-export function SkyPanoramaView({ camera, discoveredStarIds, size, stars }: SkyPanoramaViewProps) {
+export function SkyPanoramaView({ camera, discoveredStarIds, size, stars, edgeGlow }: SkyPanoramaViewProps) {
   const rendererRef = useRef<PanoramaRenderer | null>(null);
   const latest = useRef({ camera, discoveredStarIds, size, stars });
+  const glowRef = useRef<EdgeGlow>({ color: edgeGlow?.color ?? '#ffffff', opacity: 0 });
   const mounted = useRef(true);
   useLayoutEffect(() => { latest.current = { camera, discoveredStarIds, size, stars }; }, [camera, discoveredStarIds, size, stars]);
   useEffect(() => {
@@ -67,12 +71,38 @@ export function SkyPanoramaView({ camera, discoveredStarIds, size, stars }: SkyP
       return;
     }
 
-    renderPanorama(renderer, nextCamera, nextSize, nextStars, nextDiscoveredIds);
+    renderPanorama(renderer, nextCamera, nextSize, nextStars, nextDiscoveredIds, glowRef.current);
   }, []);
 
   useEffect(() => {
     render(camera, size, stars, discoveredStarIds);
   }, [camera, discoveredStarIds, render, size, stars]);
+
+  useEffect(() => {
+    const from = glowRef.current.opacity;
+    const target = edgeGlow?.opacity ?? 0;
+    glowRef.current.color = edgeGlow?.color ?? glowRef.current.color;
+    const repaint = () => {
+      const current = latest.current;
+      render(current.camera, current.size, current.stars, current.discoveredStarIds);
+    };
+    if (Math.abs(from - target) < 0.001) {
+      glowRef.current.opacity = target;
+      repaint();
+      return;
+    }
+    let frame: number;
+    let started: number | null = null;
+    const animate = (timestamp: number) => {
+      started ??= timestamp;
+      const progress = Math.min(1, (timestamp - started) / gameConfig.densityEffect.transitionMs);
+      glowRef.current.opacity = from + (target - from) * progress;
+      repaint();
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [edgeGlow?.color, edgeGlow?.opacity, render]);
 
   const onContextCreate = useCallback(
     async (gl: ExpoWebGLRenderingContext) => {
@@ -97,6 +127,7 @@ function disposeRenderer(renderer: PanoramaRenderer) {
   gl.deleteProgram(renderer.skyPass.program);
   gl.deleteProgram(renderer.mountainPass.program);
   gl.deleteProgram(renderer.starProgram);
+  gl.deleteProgram(renderer.edgeGlowPass.program);
 }
 
 async function createPanoramaRenderer(gl: ExpoWebGLRenderingContext): Promise<PanoramaRenderer> {
@@ -105,6 +136,7 @@ async function createPanoramaRenderer(gl: ExpoWebGLRenderingContext): Promise<Pa
   const starProgram = createProgram(gl, starVertexShaderSource, starFragmentShaderSource);
   const vertexBuffer = createFullscreenBuffer(gl);
   const starBuffer = createStarBuffer(gl);
+  const edgeGlowPass = createEdgeGlowPass(gl);
   const [skyTexture, mountainTexture] = await Promise.all([
     createPanoramaTexture(gl, panoramaAsset),
     createPanoramaTexture(gl, mountainPanoramaAsset),
@@ -124,6 +156,7 @@ async function createPanoramaRenderer(gl: ExpoWebGLRenderingContext): Promise<Pa
     starBuffer,
     skyTexture,
     mountainTexture,
+    edgeGlowPass,
   };
 }
 
@@ -146,6 +179,7 @@ function renderPanorama(
   size: ScreenSize,
   stars: Star[],
   discoveredStarIds: string[],
+  edgeGlow: EdgeGlow,
 ) {
   const { gl } = renderer;
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -167,6 +201,8 @@ function renderPanorama(
     mountainWorldToPanorama,
   );
   gl.disable(gl.BLEND);
+
+  drawEdgeGlow(gl, renderer.edgeGlowPass, renderer.vertexBuffer, size, edgeGlow);
 
   gl.flush();
   gl.endFrameEXP();

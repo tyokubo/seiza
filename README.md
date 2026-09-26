@@ -1,9 +1,31 @@
+# デモ動画
+
+<https://github.com/user-attachments/assets/b13e5e39-2b7a-4555-acf0-a1873cfcc6ad>
+
 # seiza
 
 **seiza** は、夜空を見渡して星を探し、自分だけの星座を作る探索ゲームです。Expo / React Native で開発中です。
 
-通常モードでは全天球の空を見ながら星の密度を手がかりに方向を探します。望遠鏡モードでは狭い視野とダウジングを頼りに星を発見・登録できます。登録した星を結び、手描きの外形や顔スタンプ、名前を加えて星座を完成させます。完成作品は現在の空に現れ、図鑑から後で見返せます。
-
+都会でも、雨の日でも、部屋の中でも天体観測！
+<p align="center">
+  <img src="assets/images/seiza1.png" width="320" alt="1">
+</p>
+スマホを掲げて夜空を見渡し、望遠鏡を覗いて隠れた星を探す星空探索ゲームです。
+<p align="center">
+  <img src="assets/images/seiza2.png" width="320" alt="2">
+</p>
+見つけた星を自由につなぎ、手描きのイラストや顔を加えて、自分だけの星座を作ることができます！
+<p align="center">
+  <img src="assets/images/seiza3.png" width="320" alt="3">
+</p>
+同じ星の並びでも、何に見えるかはあなた次第。動物に見立てたり、不思議な生き物を描いたり、思い思いの形に仕上げてみましょう！
+<p align="center">
+  <img src="assets/images/seiza4.png" width="320" alt="4">
+</p>
+完成した星座には好きな名前を付けて、自分だけの星座図鑑に残すことができます。
+<p align="center">
+  <img src="assets/images/seiza5.png" width="320" alt="5">
+</p>
 ## 開発・起動
 
 ```bash

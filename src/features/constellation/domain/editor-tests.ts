@@ -1,5 +1,7 @@
-import { createInitialCamera, worldToScreen } from '../../exploration/domain/camera.ts';
+import { cameraOrientationToward, createInitialCamera, worldToScreen } from '../../exploration/domain/camera.ts';
 import type { Sky } from '../../sky/domain/types.ts';
+import { phaseOneSky } from '../../sky/domain/sampleSky.ts';
+import { isStarAboveHorizon, skyPointToDirection } from '../../sky/domain/sphericalCoordinates.ts';
 import { clampEditorZoom, connectionAtPoint, editorReducer, getCraftableStars, nearestStar, type EditorState } from './editor.ts';
 import { normalizeConstellationName, parseSkySave } from './saveData.ts';
 
@@ -18,6 +20,15 @@ const assert = {
 };
 
 let state: EditorState = { connections: [], history: [] };
+for (const prefix of ['west-arc-', 'north-loop-']) {
+  const cluster = phaseOneSky.stars.filter((star) => star.id.startsWith(prefix));
+  assert.equal(cluster.length, 4);
+  assert.ok(cluster.every(isStarAboveHorizon));
+  const camera = createInitialCamera();
+  const pointed = { ...camera, orientation: cameraOrientationToward(camera, skyPointToDirection(cluster[0].position)) };
+  const craftable = new Set(getCraftableStars(cluster, pointed, { width: 390, height: 844 }).map((star) => star.id));
+  assert.ok(cluster.every((star) => craftable.has(star.id)));
+}
 state = editorReducer(state, { type: 'connect', from: 'a', to: 'b' });
 assert.equal(editorReducer(state, { type: 'connect', from: 'b', to: 'a' }), state);
 assert.equal(editorReducer(state, { type: 'connect', from: 'a', to: 'a' }), state);

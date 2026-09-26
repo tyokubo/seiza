@@ -14,6 +14,10 @@ type Props = {
 
 export function ConstellationButton({ bottomInset, onPress, ready, side = 'right', disabled = false }: Props) {
   const [progress] = useState(() => new Animated.Value(ready ? 1 : 0));
+  const [pressScale] = useState(() => new Animated.Value(1));
+  const animatePress = (toValue: number) => Animated.spring(pressScale, {
+    toValue, tension: 250, friction: 13, useNativeDriver: true,
+  }).start();
 
   useEffect(() => {
     const spring = Animated.spring(progress, {
@@ -52,13 +56,21 @@ export function ConstellationButton({ bottomInset, onPress, ready, side = 'right
         accessibilityState={{ disabled }}
         disabled={disabled}
         onPress={onPress}
+        onPressIn={() => animatePress(0.9)}
+        onPressOut={() => animatePress(1)}
         style={[styles.hitArea, {
           left: side === 'right' ? circleOffset - 64 : circleOffset,
-          top: circleOffset + centerBottomInset - Math.max(bottomInset, 16) - 72,
+          top: circleOffset + centerBottomInset - Math.max(bottomInset, 16) - 66,
         }]}>
-        <View pointerEvents="none">
-          <MaterialCommunityIcons name={side === 'right' ? 'creation-outline' : 'book-open-page-variant-outline'} size={32} color={disabled ? '#a3acc3' : '#edf3ff'} />
-        </View>
+        <Animated.View pointerEvents="none" style={[styles.buttonContent, { transform: [{ scale: pressScale }] }]}>
+          {side === 'right' ? <View style={styles.constellationIcon}>
+            <MaterialCommunityIcons name="vector-polyline" size={32} color={disabled ? '#a3acc3' : '#edf3ff'} />
+            <MaterialCommunityIcons name="star-four-points" size={12} color={disabled ? '#a3acc3' : '#edf3ff'} style={styles.iconStar} />
+          </View> : <MaterialCommunityIcons name="book-open-page-variant-outline" size={32} color="#edf3ff" />}
+          <Animated.Text numberOfLines={1} style={[styles.caption, disabled && styles.disabledCaption]}>
+            {side === 'right' ? '星座を作る' : '図鑑を見る'}
+          </Animated.Text>
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
@@ -68,15 +80,18 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     backgroundColor: '#182f68',
-    borderWidth: 1,
-    borderColor: '#647fb4',
     overflow: 'hidden',
   },
   hitArea: {
     position: 'absolute',
     width: 64,
-    height: 64,
+    height: 78,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonContent: { alignItems: 'center', justifyContent: 'center', gap: 3 },
+  constellationIcon: { width: 36, height: 34, alignItems: 'center', justifyContent: 'center' },
+  iconStar: { position: 'absolute', right: -1, top: -2 },
+  caption: { color: '#edf3ff', fontSize: 10, lineHeight: 14, textAlign: 'center' },
+  disabledCaption: { color: '#a3acc3' },
 });

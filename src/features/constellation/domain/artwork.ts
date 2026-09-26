@@ -64,9 +64,15 @@ function clipScreenRing(points: Point2D[], size: ScreenSize): Point2D[] {
 }
 
 export function stampProjectionIsSafe(corners: (Point2D | null)[], size: ScreenSize): boolean {
+  if (corners.length !== 4 || corners.some((point) => point === null || !Number.isFinite(point.x) || !Number.isFinite(point.y))) return false;
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners as Point2D[];
+  const centerX = (topLeft.x + topRight.x + bottomRight.x + bottomLeft.x) / 4;
+  const centerY = (topLeft.y + topRight.y + bottomRight.y + bottomLeft.y) / 4;
+  const width = Math.hypot(topRight.x - topLeft.x, topRight.y - topLeft.y);
+  const height = Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y);
   const margin = Math.max(size.width, size.height) * 2;
-  return corners.every((point) => point !== null && Number.isFinite(point.x) && Number.isFinite(point.y) &&
-    point.x >= -margin && point.x <= size.width + margin && point.y >= -margin && point.y <= size.height + margin);
+  return centerX >= -margin && centerX <= size.width + margin && centerY >= -margin && centerY <= size.height + margin &&
+    width <= margin * 2 && height <= margin * 2;
 }
 
 export function projectPlaneRing(points: Point2D[], frame: Quaternion, camera: CameraState, size: ScreenSize): Point2D[] {
