@@ -1,6 +1,6 @@
 import type { CameraState, ScreenSize } from '../../exploration/domain/camera.ts';
 import type { Star } from '../../sky/domain/types.ts';
-import { getCraftableStars, connectionKey } from './editor.ts';
+import { getCraftableStars, connectionKey, projectEditorStars } from './editor.ts';
 import type { Draft, FinishedConstellation } from './artwork.ts';
 
 export function availableStars(stars: Star[], library: FinishedConstellation[], skyId: string, editingId: string | null = null) {
@@ -14,6 +14,16 @@ export function creationChoices(stars: Star[], library: FinishedConstellation[],
     canCreate: availableStars(stars, library, skyId).filter((star) => inRange.has(star.id)).length >= 2,
     candidates: library.filter((item) => item.skyId === skyId && item.starIds.some((id) => inRange.has(id))),
   };
+}
+
+export function preferredCreationTarget(choices: ReturnType<typeof creationChoices>, camera: CameraState, size: ScreenSize): string | null | undefined {
+  if (choices.canCreate) return null;
+  const center = { x: size.width / 2, y: size.height / 2 };
+  return choices.candidates.map((item) => ({
+    id: item.id,
+    distance: Math.min(...projectEditorStars(item.stars, camera, size)
+      .map((point) => Math.hypot(point.x - center.x, point.y - center.y))),
+  })).sort((a, b) => a.distance - b.distance)[0]?.id;
 }
 
 export function validateConnections(draft: Draft, stars: Star[], library: FinishedConstellation[], skyId: string, editingId: string | null) {

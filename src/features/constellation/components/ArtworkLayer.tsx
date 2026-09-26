@@ -5,7 +5,7 @@ import type { MultiPolygon } from 'polygon-clipping';
 import { gameConfig } from '@/config/gameConfig';
 import type { CameraState, ScreenSize } from '@/features/exploration/domain/camera';
 import type { Point2D } from '@/features/sky/domain/types';
-import { planeToScreen, projectPlaneRing, stampCorners, type Artwork, type FaceStamp, type Stroke } from '../domain/artwork';
+import { planeToScreen, projectPlaneRing, stampCorners, stampProjectionIsSafe, type Artwork, type FaceStamp, type Stroke } from '../domain/artwork';
 import { texturedStroke } from '../domain/brushTexture';
 
 import stampImage from '../../../../assets/images/nikoniko.png';
@@ -41,12 +41,15 @@ export function ArtworkLayer({ artwork, camera, size, region, guide = false, pre
 function TexturedStroke({ stroke, artwork, camera, size }: { stroke: Stroke; artwork: Artwork; camera: CameraState; size: ScreenSize }) {
   const layers = useMemo(() => texturedStroke(stroke), [stroke]);
   return <G testID="artwork-stroke">{layers.map((layer, index) => <Path key={index} fill={gameConfig.constellationEditor.strokeColor} fillOpacity={layer.opacity}
-    d={layer.rings.map((ring) => projectPlaneRing(ring, artwork.frame, camera, size).map((point, i) => `${i ? 'L' : 'M'}${point.x},${point.y}`).join(' ') + ' Z').join(' ')} />)}</G>;
+    d={layer.rings.map((ring) => {
+      const points = projectPlaneRing(ring, artwork.frame, camera, size);
+      return points.length >= 3 ? points.map((point, i) => `${i ? 'L' : 'M'}${point.x},${point.y}`).join(' ') + ' Z' : '';
+    }).filter(Boolean).join(' ')} />)}</G>;
 }
 
 function ProjectedStamp({ stamp, artwork, camera, size }: { stamp: FaceStamp; artwork: Artwork; camera: CameraState; size: ScreenSize }) {
   const corners = stampCorners(stamp).map((point) => planeToScreen(point, artwork.frame, camera, size));
-  if (corners.some((point) => point === null)) return null;
+  if (!stampProjectionIsSafe(corners, size)) return null;
   const [topLeft, topRight, bottomRight, bottomLeft] = corners as [Point2D, Point2D, Point2D, Point2D];
   const width = Math.hypot(topRight.x - topLeft.x, topRight.y - topLeft.y);
   const height = Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y);

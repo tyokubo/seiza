@@ -1,10 +1,10 @@
 import { buildDrawingRegion, clipPath, fitStampAt, inDrawingRegion, stampFits } from './drawingRegion.ts';
 import { smoothBrush } from './brush.ts';
 import { texturedStroke } from './brushTexture.ts';
-import { availableStars, creationChoices, validateConnections } from './ownership.ts';
+import { availableStars, creationChoices, preferredCreationTarget, validateConnections } from './ownership.ts';
 import { stampAt, touchPair, transformCanvas, transformStamp } from './touchTransform.ts';
 import { gameConfig } from '../../../config/gameConfig.ts';
-import { draftHistoryReducer, emptyArtwork, periodKey, planeStars, planeToScreen, projectPlanePath, projectPlaneRing, screenToPlane, type DraftHistory, type FaceStamp } from './artwork.ts';
+import { draftHistoryReducer, emptyArtwork, periodKey, planeStars, planeToScreen, projectPlanePath, projectPlaneRing, screenToPlane, stampProjectionIsSafe, type DraftHistory, type FaceStamp } from './artwork.ts';
 import { quaternionFromAxisAngle } from '../../exploration/domain/orientation.ts';
 import { createInitialCamera, moveCameraBySwipe } from '../../exploration/domain/camera.ts';
 import { emptySkySave, parseSkySave, replaceFinished } from './saveData.ts';
@@ -45,9 +45,21 @@ assert(jitter < 30, 'Brush reduces small oscillations');
 const fast = smoothBrush({ point: { x: 0, y: 0 }, time: 0 }, { x: 30, y: 0 }, 16);
 assert(fast.point.x > 25 && fast.point.x <= 30, 'Fast movement follows without overshoot');
 const camera = createInitialCamera(), size = { width: 390, height: 844 }, p = { x: 0.1, y: -0.2 };
-const partial = projectPlaneRing([{ x: -1, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }], camera.orientation,
+const partial = projectPlaneRing([{ x: -3, y: -1 }, { x: 3, y: -1 }, { x: 3, y: 1 }, { x: -3, y: 1 }], camera.orientation,
   { ...camera, orientation: quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, Math.PI / 2) }, size);
 assert(partial.length >= 3 && partial.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)), 'Partially visible region must not vanish at near plane');
+const withinScreen = (point: { x: number; y: number }) => point.x >= -39 && point.x <= 429 && point.y >= -39 && point.y <= 883;
+assert(partial.every(withinScreen), 'Near-plane polygons must be clipped before reaching SVG');
+const tinyRing = [{ x: -0.01, y: -0.01 }, { x: 0.01, y: -0.01 }, { x: 0.01, y: 0.01 }, { x: -0.01, y: 0.01 }];
+for (let degrees = 0; degrees < 360; degrees += 3) {
+  const view = { ...camera, orientation: quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, degrees * Math.PI / 180) };
+  for (const zoom of [1, 2, 5]) {
+    const projected = projectPlaneRing(tinyRing, camera.orientation, { ...view, zoom }, size);
+    assert(projected.every(withinScreen), 'Rotating a textured stroke must never produce oversized SVG coordinates');
+  }
+}
+assert(!stampProjectionIsSafe([{ x: -100000, y: 0 }, { x: 1, y: 0 }], size), 'Oversized stamp projections are culled');
+assert(stampProjectionIsSafe([{ x: 100, y: 100 }, { x: 120, y: 120 }], size), 'Visible stamps remain drawable');
 assert(projectPlanePath([{ x: -1, y: 0 }, { x: 1, y: 0 }], camera.orientation,
   { ...camera, orientation: quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, Math.PI / 2) }, size).length === 1,
   'A stroke crossing the camera near plane retains its visible segment');
@@ -97,6 +109,9 @@ assert(rejected, 'Save must reject ownership violations');
 validateConnections(owner, sky.stars, [owner], owner.skyId, owner.id);
 const choices = creationChoices(sky.stars, [owner], owner.skyId, camera, size);
 assert(!choices.canCreate && choices.candidates.length === 1, 'Owned stars offer edit, not creation');
+assert(preferredCreationTarget(choices, camera, size) === owner.id, 'Crafting opens the only editable constellation directly');
+assert(preferredCreationTarget({ ...choices, canCreate: true }, camera, size) === null, 'New work takes priority when free stars are available');
+assert(preferredCreationTarget({ canCreate: false, candidates: [] }, camera, size) === undefined, 'Crafting cannot open without a valid target');
 const pair = touchPair({ x: -1, y: 0 }, { x: 1, y: 0 });
 const turned = transformStamp(stamp, pair, touchPair({ x: 0, y: -1 }, { x: 0, y: 1 }));
 assert(Math.abs(turned.rotation - Math.PI / 2) < 1e-8 && turned.position.x === stamp.position.x, 'Two fingers rotate stamp without translating it');

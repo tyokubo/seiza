@@ -36,6 +36,39 @@ export function screenToPlane(point: Point2D, camera: CameraState, size: ScreenS
 export const planeToScreen = (point: Point2D, frame: Quaternion, camera: CameraState, size: ScreenSize) =>
   projectDirectionToScreen(planeToDirection(point, frame), camera, size);
 
+const projectionMargin = (size: ScreenSize) => Math.max(32, Math.min(size.width, size.height) * 0.1);
+
+function clipScreenRing(points: Point2D[], size: ScreenSize): Point2D[] {
+  if (points.length < 3 || points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return [];
+  const margin = projectionMargin(size);
+  let ring = points;
+  for (const [axis, limit, keepGreater] of [
+    ['x', -margin, true], ['x', size.width + margin, false],
+    ['y', -margin, true], ['y', size.height + margin, false],
+  ] as const) {
+    const next: Point2D[] = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const insideA = keepGreater ? a[axis] >= limit : a[axis] <= limit;
+      const insideB = keepGreater ? b[axis] >= limit : b[axis] <= limit;
+      if (insideA !== insideB) {
+        const t = (limit - a[axis]) / (b[axis] - a[axis]);
+        next.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, [axis]: limit });
+      }
+      if (insideB) next.push(b);
+    }
+    ring = next;
+    if (ring.length < 3) return [];
+  }
+  return ring;
+}
+
+export function stampProjectionIsSafe(corners: (Point2D | null)[], size: ScreenSize): boolean {
+  const margin = Math.max(size.width, size.height) * 2;
+  return corners.every((point) => point !== null && Number.isFinite(point.x) && Number.isFinite(point.y) &&
+    point.x >= -margin && point.x <= size.width + margin && point.y >= -margin && point.y <= size.height + margin);
+}
+
 export function projectPlaneRing(points: Point2D[], frame: Quaternion, camera: CameraState, size: ScreenSize): Point2D[] {
   const local = points.map((point) => rotateVector(inverseQuaternion(camera.orientation),
     rotateVector(frame, { x: point.x, y: -point.y, z: -1 })));
@@ -50,7 +83,8 @@ export function projectPlaneRing(points: Point2D[], frame: Quaternion, camera: C
     }
   }
   const focal = size.height / (2 * Math.tan(getCameraVerticalFovRadians(camera) / 2));
-  return clipped.map((p) => ({ x: size.width / 2 + p.x / -p.z * focal, y: size.height / 2 - p.y / -p.z * focal }));
+  return clipScreenRing(clipped.map((p) => ({ x: size.width / 2 + p.x / -p.z * focal,
+    y: size.height / 2 - p.y / -p.z * focal })), size);
 }
 
 export function projectPlanePath(points: Point2D[], frame: Quaternion, camera: CameraState, size: ScreenSize): Point2D[][] {
